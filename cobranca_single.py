@@ -18,6 +18,7 @@ Configurações por ENV:
 - TIMEZONE (padrão America/Sao_Paulo)
 - TEST_MODE (true/false)
 - MULTA_PERCENT (2.0), INTEREST_MONTHLY_PERCENT (1.0), GRACE_DAYS (0)
+- NOW_OVERRIDE (opcional) - form YYYY-MM-DD to force "today" for testing
 """
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -58,6 +59,9 @@ WHATSAPP_PROVIDER = os.environ.get("WHATSAPP_PROVIDER", "none")
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_FROM = os.environ.get("TWILIO_FROM")
+
+# Optional override for "today" used in testing: YYYY-MM-DD
+NOW_OVERRIDE = os.environ.get("NOW_OVERRIDE")
 
 TIMEZONE = os.environ.get("TIMEZONE", "America/Sao_Paulo")
 TEST_MODE = os.environ.get("TEST_MODE", "true").lower() in ("1", "true", "yes")
@@ -141,7 +145,7 @@ def build_message(debtor_name, installment, amount, due_date, fines=None):
 def send_whatsapp_twilio(phone, text):
     """Send a WhatsApp message via Twilio REST API using environment secrets.
     Returns a dict with status info.
-    """
+    """  
     if TEST_MODE:
         log.info("[TEST_MODE] (Twilio) WhatsApp para %s:\n%s", phone, text)
         return {"status": "test_printed"}
@@ -181,7 +185,17 @@ def send_email_sim(email, subject, body):
     return {"status": "not_implemented"}
 
 def process():
-    now = datetime.now(TZ).date()
+    # Determine "today" - allow override for testing
+    if NOW_OVERRIDE:
+        try:
+            now = datetime.strptime(NOW_OVERRIDE, "%Y-%m-%d").date()
+            log.info("NOW_OVERRIDE in use: %s", now.isoformat())
+        except Exception:
+            log.warning("NOW_OVERRIDE value invalid, falling back to system date: %s", NOW_OVERRIDE)
+            now = datetime.now(TZ).date()
+    else:
+        now = datetime.now(TZ).date()
+
     schedule = build_schedule()
     log.info("Agenda de vencimentos gerada (%d parcelas). Hoje: %s", len(schedule), now.isoformat())
 
@@ -200,7 +214,7 @@ def process():
             if days_overdue > 0:
                 fines = calculate_late_fees(amount, days_overdue)
             text = build_message(DEBTOR_NAME, installment, amount, adj, fines)
-            # "Enviar" (no modo teste apenas imprime)
+            # "Enviar"
             wa = send_whatsapp_sim(DEBTOR_PHONE, text)
             em = send_email_sim(DEBTOR_EMAIL, f"Cobrança parcela {installment}", text)
             log.info("Ação para parcela %d: wa=%s email=%s", installment, wa, em)
