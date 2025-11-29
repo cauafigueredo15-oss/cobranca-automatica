@@ -1,0 +1,44 @@
+name: Cobrança Única - Teste
+
+on:
+  workflow_dispatch:
+  schedule:
+    # roda diariamente (UTC). Ajuste se quiser outro horário.
+    - cron: "0 10 * * *"
+
+jobs:
+  run-cobranca-single:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run cobrança single (TEST_MODE=true)
+        env:
+          # Defaults já embutidos no script; sobrescreva aqui se quiser outro ano/mês/dia
+          START_YEAR: "2026"
+          START_MONTH: "1"
+          START_DAY: "5"
+          INSTALLMENTS: "6"
+          INSTALLMENT_VALUE: "386.56"
+          DEBTOR_NAME: "Samuel Cassiano de Carvalho"
+          DEBTOR_CPF: "REDACTED"
+          DEBTOR_EMAIL: "samuelsamuelheibr@hotmail.com"
+          DEBTOR_PHONE: "+558487796531"
+          TIMEZONE: "America/Sao_Paulo"
+          TEST_MODE: "true"  # mantenha "true" até você validar
+          MULTA_PERCENT: "2.0"
+          INTEREST_MONTHLY_PERCENT: "1.0"
+          GRACE_DAYS: "0"
+        run: |
+          python cobranca_single.py
