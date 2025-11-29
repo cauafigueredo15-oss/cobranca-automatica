@@ -18,8 +18,6 @@ Configurações por ENV:
 - TIMEZONE (padrão America/Sao_Paulo)
 - TEST_MODE (true/false)
 - MULTA_PERCENT (2.0), INTEREST_MONTHLY_PERCENT (1.0), GRACE_DAYS (0)
-
-Exemplo de uso: rodar diariamente via GitHub Actions; o script imprime quando houver parcela vencendo hoje
 """
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -33,6 +31,12 @@ try:
     import holidays
 except Exception:
     holidays = None
+
+# Optional Twilio import; only required if sending real messages
+try:
+    from twilio.rest import Client as TwilioClient
+except Exception:
+    TwilioClient = None
 
 # Logger
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -48,6 +52,12 @@ DEBTOR_NAME = os.environ.get("DEBTOR_NAME", "Samuel Cassiano de Carvalho")
 DEBTOR_CPF = os.environ.get("DEBTOR_CPF", "REDACTED")
 DEBTOR_EMAIL = os.environ.get("DEBTOR_EMAIL", "samuelsamuelheibr@hotmail.com")
 DEBTOR_PHONE = os.environ.get("DEBTOR_PHONE", "+558487796531")
+
+# Provider and Twilio creds (read from env -> should be mapped to repository secrets in workflow)
+WHATSAPP_PROVIDER = os.environ.get("WHATSAPP_PROVIDER", "none")
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_FROM = os.environ.get("TWILIO_FROM")
 
 TIMEZONE = os.environ.get("TIMEZONE", "America/Sao_Paulo")
 TEST_MODE = os.environ.get("TEST_MODE", "true").lower() in ("1", "true", "yes")
@@ -128,13 +138,41 @@ def build_message(debtor_name, installment, amount, due_date, fines=None):
     msg.append("Por favor, efetue o pagamento.")
     return "\n".join(msg)
 
-def send_whatsapp_sim(phone, text):
-    # Apenas print em modo de teste
+def send_whatsapp_twilio(phone, text):
+    """Send a WhatsApp message via Twilio REST API using environment secrets.
+    Returns a dict with status info.
+    """
     if TEST_MODE:
-        log.info("[TEST] WhatsApp para %s:\n%s", phone, text)
-        return {"status": "printed"}
-    # Aqui você plugaria Twilio / Meta se quiser enviar de verdade
-    return {"status": "not_implemented"}
+        log.info("[TEST_MODE] (Twilio) WhatsApp para %s:\n%s", phone, text)
+        return {"status": "test_printed"}
+
+    if not TwilioClient:
+        log.error("twilio library is not installed")
+        return {"status": "error", "reason": "twilio_not_installed"}
+
+    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM):
+        log.error("Twilio credentials not configured in env")
+        return {"status": "error", "reason": "missing_credentials"}
+
+    try:
+        client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        msg = client.messages.create(
+            from_=TWILIO_FROM,
+            body=text,
+            to=f"whatsapp:{phone}"
+        )
+        return {"status": "sent", "sid": getattr(msg, "sid", None)}
+    except Exception as e:
+        log.exception("Erro ao enviar via Twilio")
+        return {"status": "error", "reason": str(e)}
+
+def send_whatsapp_sim(phone, text):
+    # kept for compatibility; calls provider-specific function when configured
+    if WHATSAPP_PROVIDER == "twilio":
+        return send_whatsapp_twilio(phone, text)
+    # other providers could be implemented similarly
+    log.warning("Provedor de WhatsApp não configurado ou não suportado: %s", WHATSAPP_PROVIDER)
+    return {"status": "provider_not_configured"}
 
 def send_email_sim(email, subject, body):
     if TEST_MODE:
