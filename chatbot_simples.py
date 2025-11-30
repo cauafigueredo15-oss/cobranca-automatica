@@ -162,9 +162,9 @@ Responda de forma concisa, clara e profissional. Use emojis moderadamente."""
             })
             
             # Chamar API do Groq
-            # Usando modelo mais inteligente (70B parameters)
+            # Usando modelo mais inteligente (Mixtral 8x7B - MoE architecture)
             response = self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="mixtral-8x7b-32768",
                 messages=messages,
                 temperature=0.7,
                 max_tokens=500
