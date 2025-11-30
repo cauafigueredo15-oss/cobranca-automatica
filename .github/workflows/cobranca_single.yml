@@ -11,6 +11,11 @@ on:
         options:
           - 'true'
           - 'false'
+      force_due_date:
+        description: 'Forçar dia de vencimento (formato: YYYY-MM-DD). Deixe vazio para usar data atual.'
+        required: false
+        default: ''
+        type: string
   schedule:
     # Executa diariamente às 10:00 UTC (07:00 BRT)
     - cron: "0 10 * * *"
@@ -41,9 +46,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Validar configuração
+        env:
+          NOW_OVERRIDE: ${{ github.event.inputs.force_due_date || '' }}
         run: |
           python -c "
           import sys
+          import os
           from cobranca_single import Config, ConfigError
           try:
               config = Config()
@@ -51,6 +59,9 @@ jobs:
               print(f'  Modo teste: {config.test_mode}')
               print(f'  Parcelas: {config.installments}')
               print(f'  Valor: R$ {config.installment_value}')
+              if config.now_override:
+                  print(f'  ⚠ Data forçada: {config.now_override}')
+                  print(f'    (Simulando vencimento nesta data para testes)')
           except ConfigError as e:
               print('✗ Erro de configuração:', e)
               sys.exit(1)
@@ -61,6 +72,8 @@ jobs:
 
       - name: Executar cobrança
         env:
+          # Forçar data de vencimento (para testes)
+          # Se fornecido, simula que hoje é essa data para testar envio de mensagens
           # Configurações de data e parcelas
           START_YEAR: "2026"
           START_MONTH: "1"
@@ -77,6 +90,7 @@ jobs:
           # Configurações gerais
           TIMEZONE: "America/Sao_Paulo"
           TEST_MODE: ${{ github.event.inputs.test_mode || 'true' }}
+          NOW_OVERRIDE: ${{ github.event.inputs.force_due_date || '' }}
           MULTA_PERCENT: "2.0"
           INTEREST_MONTHLY_PERCENT: "1.0"
           GRACE_DAYS: "0"
@@ -88,6 +102,10 @@ jobs:
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
         run: |
+          if [ -n "$NOW_OVERRIDE" ]; then
+            echo "⚠ ATENÇÃO: Data de vencimento forçada para $NOW_OVERRIDE"
+            echo "   O sistema simulará que hoje é esta data para testar o envio."
+          fi
           python cobranca_single.py
 
       - name: Verificar logs
