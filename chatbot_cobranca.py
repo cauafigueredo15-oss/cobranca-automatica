@@ -10,33 +10,54 @@ import logging
 from typing import Dict, Optional
 from datetime import date, datetime
 
-try:
-    from langchain_groq import ChatGroq
-    LANGCHAIN_AVAILABLE = True
-except ImportError:
-    try:
-        from langchain.chat_models import ChatGroq
-        LANGCHAIN_AVAILABLE = True
-    except ImportError:
-        ChatGroq = None
-        LANGCHAIN_AVAILABLE = False
+# Tentar importar LangChain/Groq
+ChatGroq = None
+ChatPromptTemplate = None
+MessagesPlaceholder = None
+LLMChain = None
+ConversationBufferMemory = None
+LANGCHAIN_AVAILABLE = False
 
 try:
-    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-    from langchain.chains import LLMChain
-    from langchain.memory import ConversationBufferMemory
-    from langchain_core.messages import HumanMessage, AIMessage
-except ImportError:
+    from langchain_groq import ChatGroq
+    log.debug("langchain_groq importado com sucesso")
+    LANGCHAIN_AVAILABLE = True
+except ImportError as e:
+    log.debug(f"Erro ao importar langchain_groq: {e}")
     try:
-        from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-        from langchain.chains import LLMChain
+        from langchain.chat_models import ChatGroq
+        log.debug("langchain.chat_models importado (versão antiga)")
+        LANGCHAIN_AVAILABLE = True
+    except ImportError as e2:
+        log.debug(f"Erro ao importar versão antiga: {e2}")
+        ChatGroq = None
+
+if LANGCHAIN_AVAILABLE:
+    try:
+        from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
         from langchain.memory import ConversationBufferMemory
-        from langchain.schema import HumanMessage, AIMessage
+        from langchain_core.messages import HumanMessage, AIMessage
+        log.debug("langchain_core importado com sucesso")
+    except ImportError as e:
+        log.debug(f"Erro ao importar langchain_core: {e}")
+        try:
+            from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+            from langchain.memory import ConversationBufferMemory
+            from langchain.schema import HumanMessage, AIMessage
+            log.debug("langchain (versão antiga) importado")
+        except ImportError as e2:
+            log.debug(f"Erro ao importar versão antiga: {e2}")
+            ChatPromptTemplate = None
+            MessagesPlaceholder = None
+            ConversationBufferMemory = None
+    
+    # LLMChain foi removido nas versões mais recentes, usar invoke diretamente
+    try:
+        from langchain.chains import LLMChain
+        log.debug("LLMChain importado")
     except ImportError:
-        ChatPromptTemplate = None
-        MessagesPlaceholder = None
+        log.debug("LLMChain não disponível (versão nova do LangChain)")
         LLMChain = None
-        ConversationBufferMemory = None
 
 from cobranca_single import Config, CobrancaProcessor, ScheduleItem
 
@@ -180,25 +201,46 @@ Responda de forma concisa, clara e profissional. Use emojis moderadamente."""
             # Obter memória da conversa
             memory = self._get_memory(phone)
             
+            # Obter histórico da conversa
+            chat_history = memory.chat_memory.messages if hasattr(memory, 'chat_memory') else []
+            
             # Criar prompt com contexto
             prompt = self._get_prompt_template()
             
-            # Adicionar contexto à mensagem
-            full_message = f"{context}\n\nMensagem do cliente: {message}"
+            # Gerar resposta usando invoke (API moderna do LangChain)
+            if LLMChain is not None:
+                # Versão antiga com LLMChain
+                chain = LLMChain(
+                    llm=self.llm,
+                    prompt=prompt,
+                    memory=memory,
+                    verbose=False
+                )
+                response = chain.run(input=f"{context}\n\nMensagem do cliente: {message}")
+            else:
+                # Versão nova - usar invoke diretamente
+                chain = prompt | self.llm
+                response = chain.invoke({
+                    "chat_history": chat_history,
+                    "input": f"{context}\n\nMensagem do cliente: {message}"
+                })
+                
+                # Extrair conteúdo da resposta
+                if hasattr(response, 'content'):
+                    response = response.content
+                elif isinstance(response, dict) and 'content' in response:
+                    response = response['content']
+                elif isinstance(response, str):
+                    pass
+                else:
+                    response = str(response)
             
-            # Criar chain
-            chain = LLMChain(
-                llm=self.llm,
-                prompt=prompt,
-                memory=memory,
-                verbose=False
-            )
+            # Salvar na memória
+            memory.chat_memory.add_user_message(message)
+            memory.chat_memory.add_ai_message(response)
             
-            # Gerar resposta
-            response = chain.run(input=full_message)
-            
-            log.info("Resposta gerada para %s: %s", phone, response[:100])
-            return response
+            log.info("Resposta gerada para %s: %s", phone, response[:100] if isinstance(response, str) else str(response)[:100])
+            return response if isinstance(response, str) else str(response)
             
         except Exception as e:
             log.exception("Erro ao processar mensagem com IA")
