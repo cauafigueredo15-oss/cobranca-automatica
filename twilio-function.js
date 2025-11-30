@@ -1,0 +1,150 @@
+/**
+ * Twilio Function para responder mensagens WhatsApp usando Groq AI
+ * 
+ * Configuração:
+ * 1. No Twilio Console, vá em Functions & Assets
+ * 2. Crie uma nova Function
+ * 3. Cole este código
+ * 4. Adicione as Environment Variables:
+ *    - GROQ_API_KEY: sua chave da Groq
+ *    - DEBTOR_NAME: nome do devedor
+ *    - INSTALLMENT_VALUE: valor da parcela
+ *    - PIX_KEY: chave PIX
+ * 5. Configure o webhook do WhatsApp Sandbox para apontar para esta função
+ */
+
+const https = require('https');
+
+exports.handler = async function(context, event, callback) {
+    const twiml = new Twilio.twiml.MessagingResponse();
+    
+    // Obter mensagem recebida
+    const incomingMessage = event.Body || '';
+    const fromNumber = event.From || '';
+    
+    console.log(`Mensagem recebida de ${fromNumber}: ${incomingMessage}`);
+    
+    // Verificar se é do número autorizado (opcional)
+    const authorizedNumber = context.DEBTOR_PHONE || '+558488910528';
+    if (!fromNumber.includes(authorizedNumber.replace('+', '').replace(' ', ''))) {
+        twiml.message('Desculpe, este número não está autorizado.');
+        return callback(null, twiml);
+    }
+    
+    // Obter contexto da cobrança (você pode melhorar isso buscando de uma API ou banco de dados)
+    const contextInfo = getCobrancaContext(context);
+    
+    // Gerar resposta com Groq
+    try {
+        const aiResponse = await callGroqAPI(context.GROQ_API_KEY, incomingMessage, contextInfo);
+        twiml.message(aiResponse);
+    } catch (error) {
+        console.error('Erro ao chamar Groq:', error);
+        twiml.message('Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.');
+    }
+    
+    return callback(null, twiml);
+};
+
+/**
+ * Obtém contexto da cobrança
+ * Nota: Em produção, você pode buscar isso de uma API ou banco de dados
+ */
+function getCobrancaContext(context) {
+    const debtorName = context.DEBTOR_NAME || 'Cliente';
+    const installmentValue = context.INSTALLMENT_VALUE || '386.56';
+    const pixKey = context.PIX_KEY || '84988910528';
+    const installments = context.INSTALLMENTS || '6';
+    
+    const totalDebt = (parseFloat(installmentValue) * parseInt(installments)).toFixed(2);
+    
+    return `Informações da Cobrança:
+- Devedor: ${debtorName}
+- Total de parcelas: ${installments}
+- Valor por parcela: R$ ${installmentValue}
+- Total da dívida: R$ ${totalDebt}
+- Chave PIX: ${pixKey}
+
+Para mais informações sobre parcelas específicas, pergunte diretamente.`;
+}
+
+/**
+ * Chama a API do Groq para gerar resposta
+ */
+function callGroqAPI(apiKey, userMessage, contextInfo) {
+    return new Promise((resolve, reject) => {
+        const systemPrompt = `Você é um assistente virtual profissional e educado para cobrança de dívidas.
+
+Sua função é:
+1. Responder perguntas sobre a dívida de forma clara e objetiva
+2. Fornecer informações sobre parcelas, valores e vencimentos
+3. Orientar sobre formas de pagamento (PIX)
+4. Ser empático e profissional, mas firme quando necessário
+5. NUNCA ser agressivo ou ameaçador
+6. Sempre manter tom respeitoso e profissional
+
+Informações importantes:
+- Use a chave PIX fornecida no contexto para pagamentos
+- Sempre mencione valores em Reais (R$)
+- Seja claro sobre datas de vencimento
+- Se houver parcelas vencidas, mencione mas seja educado
+
+Responda de forma concisa, clara e profissional. Use emojis moderadamente.`;
+
+        const requestData = JSON.stringify({
+            model: "llama-3.1-70b-versatile",
+            messages: [
+                {
+                    role: "system",
+                    content: `${systemPrompt}\n\n${contextInfo}`
+                },
+                {
+                    role: "user",
+                    content: userMessage
+                }
+            ],
+            temperature: 0.7,
+            max_tokens: 500
+        });
+
+        const options = {
+            hostname: 'api.groq.com',
+            path: '/openai/v1/chat/completions',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Length': Buffer.byteLength(requestData)
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+
+            res.on('end', () => {
+                try {
+                    const response = JSON.parse(data);
+                    if (response.choices && response.choices[0] && response.choices[0].message) {
+                        resolve(response.choices[0].message.content.trim());
+                    } else {
+                        reject(new Error('Resposta inválida da Groq: ' + JSON.stringify(response)));
+                    }
+                } catch (error) {
+                    reject(new Error('Erro ao parsear resposta: ' + error.message));
+                }
+            });
+        });
+
+        req.on('error', (error) => {
+            reject(error);
+        });
+
+        req.write(requestData);
+        req.end();
+    });
+}
+
