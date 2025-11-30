@@ -12,20 +12,27 @@ from datetime import date, datetime
 
 try:
     from langchain_groq import ChatGroq
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    try:
+        from langchain.chat_models import ChatGroq
+        LANGCHAIN_AVAILABLE = True
+    except ImportError:
+        ChatGroq = None
+        LANGCHAIN_AVAILABLE = False
+
+try:
     from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
     from langchain.chains import LLMChain
     from langchain.memory import ConversationBufferMemory
     from langchain_core.messages import HumanMessage, AIMessage
 except ImportError:
     try:
-        # Fallback para versões antigas
-        from langchain.chat_models import ChatGroq
         from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
         from langchain.chains import LLMChain
         from langchain.memory import ConversationBufferMemory
         from langchain.schema import HumanMessage, AIMessage
     except ImportError:
-        ChatGroq = None
         ChatPromptTemplate = None
         MessagesPlaceholder = None
         LLMChain = None
@@ -45,8 +52,13 @@ class CobrancaChatbot:
         self.llm = None
         self.memory = {}
         
-        if ChatGroq is None:
+        if not LANGCHAIN_AVAILABLE or ChatGroq is None:
             log.warning("LangChain/Groq não instalado. Chatbot desabilitado.")
+            log.warning("Instale com: pip install langchain langchain-groq groq")
+            return
+        
+        if ChatPromptTemplate is None or LLMChain is None:
+            log.warning("Componentes do LangChain não disponíveis. Chatbot desabilitado.")
             return
         
         self._initialize_llm()

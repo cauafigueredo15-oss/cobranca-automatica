@@ -32,6 +32,42 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
+          
+      - name: Verificar instalação LangChain
+        run: |
+          python -c "
+          try:
+              from langchain_groq import ChatGroq
+              print('✓ langchain-groq instalado')
+          except ImportError:
+              try:
+                  from langchain.chat_models import ChatGroq
+                  print('✓ langchain (versão antiga) instalado')
+              except ImportError:
+                  print('✗ langchain-groq NÃO instalado')
+                  import sys
+                  sys.exit(1)
+          
+          try:
+              from langchain_core.prompts import ChatPromptTemplate
+              print('✓ langchain-core instalado')
+          except ImportError:
+              try:
+                  from langchain.prompts import ChatPromptTemplate
+                  print('✓ langchain (versão antiga) instalado')
+              except ImportError:
+                  print('✗ langchain-core NÃO instalado')
+                  import sys
+                  sys.exit(1)
+          
+          try:
+              import groq
+              print('✓ groq instalado')
+          except ImportError:
+              print('✗ groq NÃO instalado')
+              import sys
+              sys.exit(1)
+          "
 
       - name: Verificar e responder mensagens
         env:
