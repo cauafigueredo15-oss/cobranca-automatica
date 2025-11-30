@@ -141,7 +141,7 @@ Informações importantes:
 Responda de forma concisa, clara e profissional. Use emojis moderadamente.`;
 
         const requestData = JSON.stringify({
-            model: "llama-3.3-70b-versatile",  // Modelo atualizado (llama-3.1-70b-versatile foi descontinuado)
+            model: "llama-3.1-8b-instant",  // Modelo disponível (llama-3.1-70b-versatile foi descontinuado)
             messages: [
                 {
                     role: "system",
@@ -169,7 +169,7 @@ Responda de forma concisa, clara e profissional. Use emojis moderadamente.`;
         };
         
         console.log('Requisição Groq - URL: https://api.groq.com/openai/v1/chat/completions');
-        console.log('Requisição Groq - Model: llama-3.3-70b-versatile');
+        console.log('Requisição Groq - Model: llama-3.1-8b-instant');
         console.log('Requisição Groq - Request data (primeiros 300 chars):', requestData.substring(0, 300));
 
         const req = https.request(options, (res) => {
