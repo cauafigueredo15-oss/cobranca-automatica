@@ -353,7 +353,7 @@ python cobranca_single.py
 
    - Diariamente às 08:00 BRT (envio de cobranças)
 
-   - A cada 2 horas (verificação de respostas)
+   - Respostas automáticas via Twilio Functions (webhook em tempo real)
 
 
 
@@ -417,9 +417,6 @@ graph TD
 
     
 
-    J[🔄 GitHub Actions<br/>A cada 2h] -->|Verifica| K[📥 Mensagens Recebidas]
-
-    K -->|Processa| G
 
     
 
@@ -457,8 +454,6 @@ cobranca-automatica/
 
 ├── 🤖 chatbot_simples.py          # Chatbot com Groq AI
 
-├── 📥 verificar_respostas.py      # Verifica mensagens recebidas
-
 ├── ⚡ twilio-function.js          # Twilio Function (webhook serverless)
 
 ├── 🌐 webhook.py                  # Webhook Flask (alternativa)
@@ -469,9 +464,7 @@ cobranca-automatica/
 
 │   └── workflows/
 
-│       ├── cobranca_single.yml    # Workflow: envio diário
-
-│       └── verificar_respostas.yml # Workflow: verificação a cada 2h
+│       └── cobranca_single.yml    # Workflow: envio diário
 
 │
 
@@ -590,9 +583,9 @@ GROQ_API_KEY=sua_chave_groq
 
 
 
-- ✅ **GitHub Actions**: Execução diária automática
+- ✅ **GitHub Actions**: Execução diária automática (envio de cobranças)
 
-- ✅ **Twilio Webhook**: Respostas em tempo real
+- ✅ **Twilio Functions**: Webhook serverless para respostas em tempo real
 
 - ✅ **Sem Servidor 24/7**: Tudo serverless/gratuito
 
@@ -637,11 +630,11 @@ TEST_MODE=false python cobranca_single.py
 
 
 
-O sistema executa automaticamente via GitHub Actions:
+O sistema executa automaticamente:
 
-- **08:00 BRT diariamente**: Envia cobranças para parcelas vencendo
+- **08:00 BRT diariamente** (GitHub Actions): Envia cobranças para parcelas vencendo
 
-- **A cada 2 horas**: Verifica e responde mensagens recebidas
+- **Tempo real** (Twilio Functions): Responde mensagens recebidas via webhook
 
 
 
