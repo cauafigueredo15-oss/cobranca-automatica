@@ -97,7 +97,7 @@ jobs:
           DEBTOR_NAME: "Samuel Cassiano de Carvalho"
           DEBTOR_CPF: "REDACTED"
           DEBTOR_EMAIL: "samuelsamuelheibr@hotmail.com"
-          DEBTOR_PHONE: "+558488910528"
+          DEBTOR_PHONE: "+558487796531"
           
           # Configurações gerais
           TIMEZONE: "America/Sao_Paulo"
@@ -133,7 +133,7 @@ jobs:
           DEBTOR_NAME: "Samuel Cassiano de Carvalho"
           DEBTOR_CPF: "REDACTED"
           DEBTOR_EMAIL: "samuelsamuelheibr@hotmail.com"
-          DEBTOR_PHONE: "+558488910528"
+          DEBTOR_PHONE: "+558487796531"
           TIMEZONE: "America/Sao_Paulo"
           TEST_MODE: ${{ github.event.inputs.test_mode || 'true' }}
           MULTA_PERCENT: "2.0"

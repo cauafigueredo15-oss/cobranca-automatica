@@ -75,7 +75,7 @@ class Config:
         self.debtor_name = os.environ.get("DEBTOR_NAME", "Samuel Cassiano de Carvalho")
         self.debtor_cpf = os.environ.get("DEBTOR_CPF", "REDACTED")
         self.debtor_email = os.environ.get("DEBTOR_EMAIL", "samuelsamuelheibr@hotmail.com")
-        self.debtor_phone = os.environ.get("DEBTOR_PHONE", "+558488910528")
+        self.debtor_phone = os.environ.get("DEBTOR_PHONE", "+558487796531")
         self.timezone = os.environ.get("TIMEZONE", "America/Sao_Paulo")
         self.test_mode = os.environ.get("TEST_MODE", "false").lower() in ("1", "true", "yes")
         self.multa_percent = self._get_decimal("MULTA_PERCENT", "2.0")
