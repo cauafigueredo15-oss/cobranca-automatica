@@ -52,7 +52,7 @@ INSTALLMENT_VALUE = Decimal(os.environ.get("INSTALLMENT_VALUE", "386.56"))
 DEBTOR_NAME = os.environ.get("DEBTOR_NAME", "Samuel Cassiano de Carvalho")
 DEBTOR_CPF = os.environ.get("DEBTOR_CPF", "REDACTED")
 DEBTOR_EMAIL = os.environ.get("DEBTOR_EMAIL", "samuelsamuelheibr@hotmail.com")
-DEBTOR_PHONE = os.environ.get("DEBTOR_PHONE", "+558487796531")
+DEBTOR_PHONE = os.environ.get("DEBTOR_PHONE", "+558488910528")
 
 # Provider and Twilio creds (read from env -> should be mapped to repository secrets in workflow)
 WHATSAPP_PROVIDER = os.environ.get("WHATSAPP_PROVIDER", "none")
@@ -64,7 +64,7 @@ TWILIO_FROM = os.environ.get("TWILIO_FROM")
 NOW_OVERRIDE = os.environ.get("NOW_OVERRIDE")
 
 TIMEZONE = os.environ.get("TIMEZONE", "America/Sao_Paulo")
-TEST_MODE = os.environ.get("TEST_MODE", "true").lower() in ("1", "true", "yes")
+TEST_MODE = os.environ.get("TEST_MODE", "false").lower() in ("1", "true", "yes")
 MULTA_PERCENT = Decimal(os.environ.get("MULTA_PERCENT", "2.0"))  # 2%
 INTEREST_MONTHLY_PERCENT = Decimal(os.environ.get("INTEREST_MONTHLY_PERCENT", "1.0"))  # 1% ao mês
 GRACE_DAYS = int(os.environ.get("GRACE_DAYS", "0"))
