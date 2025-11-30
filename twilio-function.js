@@ -18,29 +18,52 @@ const https = require('https');
 exports.handler = async function(context, event, callback) {
     const twiml = new Twilio.twiml.MessagingResponse();
     
-    // Obter mensagem recebida
-    const incomingMessage = event.Body || '';
-    const fromNumber = event.From || '';
-    
-    console.log(`Mensagem recebida de ${fromNumber}: ${incomingMessage}`);
-    
-    // Verificar se é do número autorizado (opcional)
-    const authorizedNumber = context.DEBTOR_PHONE || '+558488910528';
-    if (!fromNumber.includes(authorizedNumber.replace('+', '').replace(' ', ''))) {
-        twiml.message('Desculpe, este número não está autorizado.');
-        return callback(null, twiml);
-    }
-    
-    // Obter contexto da cobrança (você pode melhorar isso buscando de uma API ou banco de dados)
-    const contextInfo = getCobrancaContext(context);
-    
-    // Gerar resposta com Groq
     try {
-        const aiResponse = await callGroqAPI(context.GROQ_API_KEY, incomingMessage, contextInfo);
+        // Obter mensagem recebida
+        const incomingMessage = event.Body || '';
+        const fromNumber = event.From || '';
+        
+        console.log(`Mensagem recebida de ${fromNumber}: ${incomingMessage}`);
+        
+        // Verificar se GROQ_API_KEY está configurada
+        const groqApiKey = context.GROQ_API_KEY;
+        if (!groqApiKey) {
+            console.error('GROQ_API_KEY não configurada nas Environment Variables');
+            twiml.message('Erro de configuração: GROQ_API_KEY não encontrada. Verifique as Environment Variables.');
+            return callback(null, twiml);
+        }
+        
+        // Verificar se é do número autorizado (opcional - comentado para testes)
+        // const authorizedNumber = context.DEBTOR_PHONE || '+558488910528';
+        // if (!fromNumber.includes(authorizedNumber.replace('+', '').replace(' ', ''))) {
+        //     twiml.message('Desculpe, este número não está autorizado.');
+        //     return callback(null, twiml);
+        // }
+        
+        // Obter contexto da cobrança
+        const contextInfo = getCobrancaContext(context);
+        console.log('Contexto gerado:', contextInfo.substring(0, 100) + '...');
+        
+        // Gerar resposta com Groq
+        console.log('Chamando API Groq...');
+        const aiResponse = await callGroqAPI(groqApiKey, incomingMessage, contextInfo);
+        console.log('Resposta recebida:', aiResponse.substring(0, 100) + '...');
+        
         twiml.message(aiResponse);
+        
     } catch (error) {
-        console.error('Erro ao chamar Groq:', error);
-        twiml.message('Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.');
+        console.error('Erro na Function:', error);
+        console.error('Stack:', error.stack);
+        
+        // Mensagem de erro mais informativa
+        let errorMessage = 'Desculpe, ocorreu um erro ao processar sua mensagem.';
+        
+        if (error.message) {
+            console.error('Mensagem de erro:', error.message);
+            // Não expor detalhes técnicos ao usuário, mas logar
+        }
+        
+        twiml.message(errorMessage + ' Tente novamente mais tarde.');
     }
     
     return callback(null, twiml);
@@ -127,20 +150,38 @@ Responda de forma concisa, clara e profissional. Use emojis moderadamente.`;
 
             res.on('end', () => {
                 try {
+                    if (res.statusCode !== 200) {
+                        console.error('Erro HTTP da Groq:', res.statusCode, data);
+                        reject(new Error(`Groq API retornou status ${res.statusCode}: ${data.substring(0, 200)}`));
+                        return;
+                    }
+                    
                     const response = JSON.parse(data);
+                    console.log('Resposta Groq parseada:', JSON.stringify(response).substring(0, 200));
+                    
                     if (response.choices && response.choices[0] && response.choices[0].message) {
                         resolve(response.choices[0].message.content.trim());
+                    } else if (response.error) {
+                        reject(new Error(`Groq API Error: ${response.error.message || JSON.stringify(response.error)}`));
                     } else {
-                        reject(new Error('Resposta inválida da Groq: ' + JSON.stringify(response)));
+                        reject(new Error('Resposta inválida da Groq: ' + JSON.stringify(response).substring(0, 500)));
                     }
                 } catch (error) {
+                    console.error('Erro ao parsear resposta:', error, 'Data:', data.substring(0, 500));
                     reject(new Error('Erro ao parsear resposta: ' + error.message));
                 }
             });
         });
 
         req.on('error', (error) => {
+            console.error('Erro na requisição HTTPS:', error);
             reject(error);
+        });
+
+        // Timeout de 8 segundos (Functions têm limite de 10s)
+        req.setTimeout(8000, () => {
+            req.destroy();
+            reject(new Error('Timeout ao chamar API Groq'));
         });
 
         req.write(requestData);
