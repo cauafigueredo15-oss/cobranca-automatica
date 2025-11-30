@@ -69,7 +69,7 @@ class Config:
     def __init__(self):
         self.start_year = self._get_int("START_YEAR", 2026)
         self.start_month = self._get_int("START_MONTH", 1)
-        self.start_day = self._get_int("START_DAY", 5)
+        self.business_days_after_month_start = self._get_int("BUSINESS_DAYS_AFTER_MONTH_START", 5)
         self.installments = self._get_int("INSTALLMENTS", 6)
         self.installment_value = self._get_decimal("INSTALLMENT_VALUE", "386.56")
         self.debtor_name = os.environ.get("DEBTOR_NAME", "Samuel Cassiano de Carvalho")
@@ -83,6 +83,7 @@ class Config:
         self.grace_days = self._get_int("GRACE_DAYS", 0)
         self.currency = os.environ.get("CURRENCY", "BRL")
         self.now_override = os.environ.get("NOW_OVERRIDE")
+        self.pix_key = os.environ.get("PIX_KEY", "84988910528")
         
         # Twilio
         self.whatsapp_provider = os.environ.get("WHATSAPP_PROVIDER", "none")
@@ -116,13 +117,8 @@ class Config:
         if not (1 <= self.start_month <= 12):
             errors.append(f"Mês inicial inválido: {self.start_month}")
         
-        if not (1 <= self.start_day <= 31):
-            errors.append(f"Dia inicial inválido: {self.start_day}")
-        
-        try:
-            date(self.start_year, self.start_month, self.start_day)
-        except ValueError as e:
-            errors.append(f"Data inicial inválida: {e}")
+        if self.business_days_after_month_start < 1:
+            errors.append(f"Dias úteis após início do mês deve ser >= 1: {self.business_days_after_month_start}")
         
         if self.installments < 1:
             errors.append(f"Número de parcelas inválido: {self.installments}")
@@ -256,47 +252,120 @@ class BusinessDayAdjuster:
         if d != original:
             log.debug("Data ajustada: %s -> %s", original.isoformat(), d.isoformat())
         return d
+    
+    def get_nth_business_day_of_month(self, year: int, month: int, n: int) -> date:
+        """
+        Retorna o N-ésimo dia útil do mês.
+        
+        Args:
+            year: Ano
+            month: Mês (1-12)
+            n: Número do dia útil (1 = primeiro dia útil do mês)
+        
+        Returns:
+            Data do N-ésimo dia útil
+        """
+        # Começa no dia 1 do mês
+        current = date(year, month, 1)
+        business_days_count = 0
+        
+        while business_days_count < n:
+            if self.is_business_day(current):
+                business_days_count += 1
+                if business_days_count == n:
+                    return current
+            current = current + timedelta(days=1)
+        
+        return current
 
 
 class MessageBuilder:
     """Constrói mensagens de cobrança."""
     
-    def __init__(self, currency: str = "BRL"):
+    def __init__(self, currency: str = "BRL", pix_key: str = ""):
         self.currency = currency
+        self.pix_key = pix_key
     
     def build_message(self, debtor_name: str, installment: int, amount: Decimal,
-                     due_date: date, fines: Optional[Dict[str, Decimal]] = None) -> str:
+                     due_date: date, schedule: List[ScheduleItem], current_date: date,
+                     fines: Optional[Dict[str, Decimal]] = None) -> str:
         """
-        Constrói mensagem de cobrança.
+        Constrói mensagem de cobrança formatada.
         
         Args:
             debtor_name: Nome do devedor
-            installment: Número da parcela
+            installment: Número da parcela atual
             amount: Valor da parcela
             due_date: Data de vencimento
+            schedule: Lista completa de parcelas
+            current_date: Data atual
             fines: Dict com multa, juros e total (opcional)
         
         Returns:
             Mensagem formatada
         """
+        # Calcular total da dívida
+        total_debt = sum(item.amount for item in schedule)
+        
+        # Construir mensagem
         lines = [
-            f"Olá {debtor_name},",
+            f"💳 *Cobrança*",
             f"",
-            f"Parcela {installment}: {self.currency} {amount:.2f}",
-            f"Vencimento (ajustado para dia útil): {due_date.strftime('%d/%m/%Y')}",
+            f"*{debtor_name}*",
+            f"{self.currency} {total_debt:.2f} ({len(schedule)}x de {self.currency} {amount:.2f})",
+            f"",
+            f"━━━━━━━━━━━━━━━━━━━━",
+            f"",
         ]
+        
+        # Lista de parcelas
+        for item in schedule:
+            status = "✅" if current_date > item.adjusted_due else ("📅" if current_date == item.adjusted_due else "⏳")
+            month_name = self._get_month_name_pt(item.adjusted_due.month)
+            date_str = f"{item.adjusted_due.day:02d} {month_name}"
+            
+            if current_date >= item.adjusted_due:
+                lines.append(f"{date_str} - {self.currency} {item.amount:.2f} {status}")
+            else:
+                lines.append(f"{date_str} - {self.currency} {item.amount:.2f}")
+        
+        lines.extend([
+            f"",
+            f"━━━━━━━━━━━━━━━━━━━━",
+            f"",
+            f"📌 *Parcela {installment} vencendo:*",
+            f"💵 {self.currency} {amount:.2f}",
+            f"📅 {due_date.strftime('%d/%m/%Y')}",
+        ])
         
         if fines and fines.get("total", amount) > amount:
             lines.extend([
                 f"",
-                f"Multa: {fines['multa']:.2f} | Juros acumulados: {fines['juros']:.2f}",
-                f"Total devido neste momento: {fines['total']:.2f}"
+                f"⚠️ *Valor com multa e juros:*",
+                f"Multa: {self.currency} {fines['multa']:.2f}",
+                f"Juros: {self.currency} {fines['juros']:.2f}",
+                f"*Total: {self.currency} {fines['total']:.2f}*",
             ])
         
-        lines.append("")
-        lines.append("Por favor, efetue o pagamento.")
+        lines.extend([
+            f"",
+            f"━━━━━━━━━━━━━━━━━━━━",
+            f"",
+            f"💸 *Forma de Pagamento:*",
+            f"",
+            f"📱 *PIX:*",
+            f"`{self.pix_key}`",
+            f"",
+            f"Por favor, efetue o pagamento.",
+        ])
         
         return "\n".join(lines)
+    
+    def _get_month_name_pt(self, month: int) -> str:
+        """Retorna nome do mês em português abreviado."""
+        months = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+                 "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+        return months[month] if 1 <= month <= 12 else str(month)
 
 
 class WhatsAppSender:
@@ -437,18 +506,32 @@ class CobrancaProcessor:
             config.grace_days
         )
         self.adjuster = BusinessDayAdjuster(config.timezone)
-        self.message_builder = MessageBuilder(config.currency)
+        self.message_builder = MessageBuilder(config.currency, config.pix_key)
         self.whatsapp_sender = WhatsAppSender(config)
         self.email_sender = EmailSender(config)
     
     def build_schedule(self) -> List[ScheduleItem]:
-        """Gera o cronograma de pagamentos."""
+        """
+        Gera o cronograma de pagamentos.
+        Cada parcela vence no N-ésimo dia útil do mês (ex: 5º dia útil).
+        """
         schedule = []
-        base_date = date(self.config.start_year, self.config.start_month, self.config.start_day)
         
         for i in range(self.config.installments):
-            original_due = base_date + relativedelta(months=i)
-            adjusted_due = self.adjuster.adjust_to_next_business_day(original_due)
+            # Calcular mês e ano da parcela
+            target_date = date(self.config.start_year, self.config.start_month, 1) + relativedelta(months=i)
+            year = target_date.year
+            month = target_date.month
+            
+            # Calcular o N-ésimo dia útil do mês
+            adjusted_due = self.adjuster.get_nth_business_day_of_month(
+                year, 
+                month, 
+                self.config.business_days_after_month_start
+            )
+            
+            # Original é o mesmo que adjusted (não há "original" na nova lógica)
+            original_due = adjusted_due
             
             schedule.append(ScheduleItem(
                 installment=i + 1,
@@ -489,7 +572,7 @@ class CobrancaProcessor:
                 if current_date == item.adjusted_due:
                     # Parcela vencendo hoje
                     action_taken = True
-                    self._process_due_today(item, current_date)
+                    self._process_due_today(item, current_date, schedule)
                 elif current_date > item.adjusted_due:
                     # Parcela vencida
                     self._log_overdue(item, current_date)
@@ -504,7 +587,7 @@ class CobrancaProcessor:
             log.exception("Erro ao processar cobranças")
             raise
     
-    def _process_due_today(self, item: ScheduleItem, current_date: date):
+    def _process_due_today(self, item: ScheduleItem, current_date: date, schedule: List[ScheduleItem]):
         """Processa parcela vencendo hoje."""
         days_overdue = self.calculator.get_days_overdue(item.adjusted_due, current_date)
         fines = None
@@ -517,6 +600,8 @@ class CobrancaProcessor:
             item.installment,
             item.amount,
             item.adjusted_due,
+            schedule,
+            current_date,
             fines
         )
         

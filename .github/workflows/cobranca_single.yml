@@ -17,8 +17,9 @@ on:
         default: ''
         type: string
   schedule:
-    # Executa diariamente às 10:00 UTC (07:00 BRT)
-    - cron: "0 10 * * *"
+    # Executa diariamente às 11:00 UTC (08:00 BRT)
+    # Formato: minuto hora dia mês dia-da-semana
+    - cron: "0 11 * * *"
 
 env:
   PYTHON_VERSION: "3.11"
@@ -77,7 +78,7 @@ jobs:
           # Configurações de data e parcelas
           START_YEAR: "2026"
           START_MONTH: "1"
-          START_DAY: "5"
+          BUSINESS_DAYS_AFTER_MONTH_START: "5"
           INSTALLMENTS: "6"
           INSTALLMENT_VALUE: "386.56"
           
@@ -95,6 +96,7 @@ jobs:
           INTEREST_MONTHLY_PERCENT: "1.0"
           GRACE_DAYS: "0"
           CURRENCY: "BRL"
+          PIX_KEY: "84988910528"
           
           # Configurações Twilio (secrets do repositório)
           WHATSAPP_PROVIDER: "twilio"
