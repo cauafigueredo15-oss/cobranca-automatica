@@ -18,8 +18,28 @@ except ImportError:
     TwilioClient = None
     TwilioException = None
 
+# Configurar logging primeiro
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+log = logging.getLogger("verificar_respostas")
+
 from cobranca_single import Config
-from chatbot_cobranca import create_chatbot, CobrancaChatbot
+
+# Tentar importar chatbot simplificado primeiro (mais confiável)
+try:
+    from chatbot_simples import create_chatbot, CobrancaChatbotSimples as CobrancaChatbot
+    log.info("Usando chatbot simplificado (Groq direto)")
+except ImportError:
+    try:
+        from chatbot_cobranca import create_chatbot, CobrancaChatbot
+        log.info("Usando chatbot com LangChain")
+    except ImportError:
+        log.warning("Nenhum chatbot disponível")
+        create_chatbot = None
+        CobrancaChatbot = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,7 +52,7 @@ log = logging.getLogger("verificar_respostas")
 class MessageChecker:
     """Verifica e responde mensagens recebidas no Twilio."""
     
-    def __init__(self, config: Config, chatbot: Optional[CobrancaChatbot] = None):
+    def __init__(self, config: Config, chatbot=None):
         self.config = config
         self.chatbot = chatbot
         
