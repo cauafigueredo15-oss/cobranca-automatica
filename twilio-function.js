@@ -57,10 +57,20 @@ exports.handler = async function(context, event, callback) {
         
         // Gerar resposta com Groq
         console.log('Chamando API Groq...');
-        const aiResponse = await callGroqAPI(groqApiKey, incomingMessage, contextInfo);
-        console.log('✅ Resposta recebida (primeiros 200 chars):', aiResponse.substring(0, 200));
-        
-        twiml.message(aiResponse);
+        let aiResponse;
+        try {
+            aiResponse = await callGroqAPI(groqApiKey, incomingMessage, contextInfo);
+            console.log('✅ Resposta recebida (primeiros 200 chars):', aiResponse.substring(0, 200));
+            twiml.message(aiResponse);
+        } catch (groqError) {
+            console.error('❌ Erro específico da Groq:', groqError.message);
+            console.error('Stack:', groqError.stack);
+            
+            // Resposta de fallback baseada em palavras-chave
+            const fallbackResponse = generateFallbackResponse(incomingMessage, contextInfo);
+            console.log('Usando resposta de fallback:', fallbackResponse.substring(0, 200));
+            twiml.message(fallbackResponse);
+        }
         
     } catch (error) {
         console.error('❌ ERRO na Function:');
@@ -229,5 +239,43 @@ Responda de forma concisa, clara e profissional. Use emojis moderadamente.`;
         req.write(requestData);
         req.end();
     });
+}
+
+/**
+ * Gera resposta de fallback caso a API Groq falhe
+ */
+function generateFallbackResponse(userMessage, contextInfo) {
+    const message = userMessage.toLowerCase().trim();
+    
+    // Extrair informações do contexto
+    const totalMatch = contextInfo.match(/Total da dívida: R\$ ([\d.]+)/);
+    const parcelasMatch = contextInfo.match(/Total de parcelas: (\d+)/);
+    const valorParcelaMatch = contextInfo.match(/Valor por parcela: R\$ ([\d.]+)/);
+    const pixMatch = contextInfo.match(/Chave PIX: ([\d]+)/);
+    
+    const total = totalMatch ? totalMatch[1] : '2.319,36';
+    const parcelas = parcelasMatch ? parcelasMatch[1] : '6';
+    const valorParcela = valorParcelaMatch ? valorParcelaMatch[1] : '386,56';
+    const pix = pixMatch ? pixMatch[1] : '84988910528';
+    
+    // Respostas baseadas em palavras-chave
+    if (message.includes('dívida') || message.includes('devo') || message.includes('valor')) {
+        return `Olá! Sua dívida total é de R$ ${total}, dividida em ${parcelas} parcelas de R$ ${valorParcela}. Para pagar, utilize a chave PIX: ${pix}`;
+    }
+    
+    if (message.includes('parcela')) {
+        return `Você tem ${parcelas} parcelas de R$ ${valorParcela} cada. Total: R$ ${total}. Chave PIX: ${pix}`;
+    }
+    
+    if (message.includes('pix') || message.includes('pagamento') || message.includes('pagar')) {
+        return `Para efetuar o pagamento, utilize a chave PIX: ${pix}. Valor total da dívida: R$ ${total}`;
+    }
+    
+    if (message.includes('oi') || message.includes('olá') || message.includes('ola')) {
+        return `Olá! Como posso ajudar? Posso informar sobre valores, parcelas e formas de pagamento.`;
+    }
+    
+    // Resposta genérica
+    return `Olá! Posso ajudar com informações sobre sua dívida. Pergunte sobre valores, parcelas ou formas de pagamento. Total da dívida: R$ ${total}. Chave PIX: ${pix}`;
 }
 
