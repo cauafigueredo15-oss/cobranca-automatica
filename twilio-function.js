@@ -152,7 +152,7 @@ Informações importantes:
 Responda de forma concisa, clara e profissional. Use emojis moderadamente.`;
 
         const requestData = JSON.stringify({
-            model: "mixtral-8x7b-32768",  // Modelo mais inteligente e disponível (MoE 8x7B)
+            model: "llama-3.3-70b-versatile",  // Modelo custo-benefício (70B parameters)
             messages: [
                 {
                     role: "system",
@@ -180,7 +180,7 @@ Responda de forma concisa, clara e profissional. Use emojis moderadamente.`;
         };
         
         console.log('Requisição Groq - URL: https://api.groq.com/openai/v1/chat/completions');
-        console.log('Requisição Groq - Model: mixtral-8x7b-32768');
+        console.log('Requisição Groq - Model: llama-3.3-70b-versatile');
         console.log('Requisição Groq - Request data (primeiros 300 chars):', requestData.substring(0, 300));
 
         const req = https.request(options, (res) => {
