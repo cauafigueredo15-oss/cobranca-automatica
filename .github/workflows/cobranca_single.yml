@@ -17,9 +17,14 @@ on:
         default: ''
         type: string
   schedule:
-    # Executa diariamente às 11:00 UTC (08:00 BRT)
+    # Executa apenas nos dias de vencimento das parcelas às 11:00 UTC (08:00 BRT)
     # Formato: minuto hora dia mês dia-da-semana
-    - cron: "0 11 * * *"
+    - cron: "0 11 8 1 *"   # Parcela 1 - 08/01/2026
+    - cron: "0 11 6 2 *"   # Parcela 2 - 06/02/2026
+    - cron: "0 11 6 3 *"   # Parcela 3 - 06/03/2026
+    - cron: "0 11 8 4 *"   # Parcela 4 - 08/04/2026
+    - cron: "0 11 8 5 *"   # Parcela 5 - 08/05/2026
+    - cron: "0 11 5 6 *"   # Parcela 6 - 05/06/2026
 
 env:
   PYTHON_VERSION: "3.11"
