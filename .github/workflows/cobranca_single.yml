@@ -16,6 +16,11 @@ on:
         required: false
         default: ''
         type: string
+      debtor_phone:
+        description: 'Número de telefone do devedor (formato: +5584987796531). Deixe vazio para usar o padrão.'
+        required: false
+        default: ''
+        type: string
   schedule:
     # Executa apenas nos dias de vencimento das parcelas às 11:00 UTC (08:00 BRT)
     # Formato: minuto hora dia mês dia-da-semana
@@ -91,7 +96,7 @@ jobs:
           DEBTOR_NAME: "Samuel Cassiano de Carvalho"
           DEBTOR_CPF: "REDACTED"
           DEBTOR_EMAIL: "samuelsamuelheibr@hotmail.com"
-          DEBTOR_PHONE: "+558487796531"
+          DEBTOR_PHONE: ${{ github.event.inputs.debtor_phone || '+558487796531' }}
           
           # Configurações gerais
           TIMEZONE: "America/Sao_Paulo"
