@@ -50,17 +50,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
-          
-      - name: Verificar instalação (opcional para chatbot)
-        if: always()
-        run: |
-          python -c "
-          try:
-              from langchain_groq import ChatGroq
-              print('✓ langchain-groq disponível')
-          except ImportError:
-              print('⚠ langchain-groq não disponível (chatbot desabilitado)')
-          "
 
       - name: Validar configuração
         env:
