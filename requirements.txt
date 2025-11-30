@@ -1,3 +1,4 @@
-pytz
-holidays
-python-dateutil
+pytz>=2024.1
+holidays>=0.34
+python-dateutil>=2.8.2
+twilio>=8.10.0

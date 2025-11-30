@@ -1,44 +1,96 @@
-name: Cobrança Única - Teste
+name: Cobrança Automática
 
 on:
   workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Executar em modo de teste?'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
   schedule:
-    # roda diariamente (UTC). Ajuste se quiser outro horário.
+    # Executa diariamente às 10:00 UTC (07:00 BRT)
     - cron: "0 10 * * *"
 
+env:
+  PYTHON_VERSION: "3.11"
+
 jobs:
-  run-cobranca-single:
+  run-cobranca:
+    name: Executar Cobrança
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
     steps:
-      - name: Checkout
+      - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
+      - name: Configurar Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
-      - name: Install deps
+      - name: Instalar dependências
         run: |
           python -m pip install --upgrade pip
+          pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
 
-      - name: Run cobrança single (TEST_MODE=true)
+      - name: Validar configuração
+        run: |
+          python -c "
+          import sys
+          from cobranca_single import Config, ConfigError
+          try:
+              config = Config()
+              print('✓ Configuração válida')
+              print(f'  Modo teste: {config.test_mode}')
+              print(f'  Parcelas: {config.installments}')
+              print(f'  Valor: R$ {config.installment_value}')
+          except ConfigError as e:
+              print('✗ Erro de configuração:', e)
+              sys.exit(1)
+          except Exception as e:
+              print('✗ Erro inesperado:', e)
+              sys.exit(1)
+          "
+
+      - name: Executar cobrança
         env:
-          # Defaults já embutidos no script; sobrescreva aqui se quiser outro ano/mês/dia
+          # Configurações de data e parcelas
           START_YEAR: "2026"
           START_MONTH: "1"
           START_DAY: "5"
           INSTALLMENTS: "6"
           INSTALLMENT_VALUE: "386.56"
+          
+          # Dados do devedor
           DEBTOR_NAME: "Samuel Cassiano de Carvalho"
           DEBTOR_CPF: "REDACTED"
           DEBTOR_EMAIL: "samuelsamuelheibr@hotmail.com"
-          DEBTOR_PHONE: "+558487796531"
+          DEBTOR_PHONE: "+558488910528"
+          
+          # Configurações gerais
           TIMEZONE: "America/Sao_Paulo"
-          TEST_MODE: "true"  # mantenha "true" até você validar
+          TEST_MODE: ${{ github.event.inputs.test_mode || 'true' }}
           MULTA_PERCENT: "2.0"
           INTEREST_MONTHLY_PERCENT: "1.0"
           GRACE_DAYS: "0"
+          CURRENCY: "BRL"
+          
+          # Configurações Twilio (secrets do repositório)
+          WHATSAPP_PROVIDER: "twilio"
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
         run: |
           python cobranca_single.py
+
+      - name: Verificar logs
+        if: always()
+        run: |
+          echo "Workflow concluído. Verifique os logs acima para detalhes."
