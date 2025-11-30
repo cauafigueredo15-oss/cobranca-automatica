@@ -327,6 +327,22 @@ class WhatsAppSender:
         log.warning("Provedor de WhatsApp não configurado: %s", self.provider)
         return {"status": "provider_not_configured", "provider": self.provider}
     
+    def _normalize_phone(self, phone: str) -> str:
+        """Normaliza número de telefone removendo prefixo whatsapp: se existir."""
+        phone = phone.strip()
+        if phone.startswith("whatsapp:"):
+            phone = phone[9:]  # Remove "whatsapp:"
+        return phone
+    
+    def _validate_phone_format(self, phone: str) -> bool:
+        """Valida se o número está no formato E.164 (+5511999999999)."""
+        if not phone:
+            return False
+        # Remove espaços e hífens
+        phone = phone.replace(" ", "").replace("-", "")
+        # Deve começar com + e ter pelo menos 10 dígitos
+        return phone.startswith("+") and len(phone) >= 11 and phone[1:].isdigit()
+    
     def _send_twilio(self, phone: str, text: str) -> Dict[str, str]:
         """Envia mensagem via Twilio."""
         if not TwilioClient:
@@ -336,24 +352,59 @@ class WhatsAppSender:
         if not all([self.config.twilio_account_sid, 
                    self.config.twilio_auth_token, 
                    self.config.twilio_from]):
-            log.error("Credenciais Twilio não configuradas")
-            return {"status": "error", "reason": "missing_credentials"}
+            log.error("Credenciais Twilio não configuradas completamente")
+            missing = []
+            if not self.config.twilio_account_sid:
+                missing.append("TWILIO_ACCOUNT_SID")
+            if not self.config.twilio_auth_token:
+                missing.append("TWILIO_AUTH_TOKEN")
+            if not self.config.twilio_from:
+                missing.append("TWILIO_FROM")
+            log.error("Secrets faltando: %s", ", ".join(missing))
+            return {"status": "error", "reason": f"missing_credentials: {', '.join(missing)}"}
+        
+        # Normalizar e validar números
+        twilio_from = self._normalize_phone(self.config.twilio_from)
+        phone_to = self._normalize_phone(phone)
+        
+        if not self._validate_phone_format(twilio_from):
+            log.error("TWILIO_FROM inválido: '%s'. Deve estar no formato E.164 (ex: +5511999999999)", 
+                     self.config.twilio_from)
+            return {"status": "error", "reason": f"invalid_from_number: {self.config.twilio_from}"}
+        
+        if not self._validate_phone_format(phone_to):
+            log.error("Número de destino inválido: '%s'. Deve estar no formato E.164 (ex: +5511999999999)", phone)
+            return {"status": "error", "reason": f"invalid_to_number: {phone}"}
         
         try:
             client = TwilioClient(
                 self.config.twilio_account_sid,
                 self.config.twilio_auth_token
             )
+            
+            from_number = f"whatsapp:{twilio_from}"
+            to_number = f"whatsapp:{phone_to}"
+            
+            log.debug("Enviando WhatsApp via Twilio: de %s para %s", from_number, to_number)
+            
             message = client.messages.create(
-                from_=f"whatsapp:{self.config.twilio_from}",
+                from_=from_number,
                 body=text,
-                to=f"whatsapp:{phone}"
+                to=to_number
             )
             log.info("Mensagem WhatsApp enviada via Twilio. SID: %s", message.sid)
             return {"status": "sent", "sid": message.sid, "provider": "twilio"}
         except TwilioException as e:
-            log.exception("Erro ao enviar mensagem via Twilio")
-            return {"status": "error", "reason": str(e), "provider": "twilio"}
+            error_msg = str(e)
+            log.error("Erro ao enviar mensagem via Twilio: %s", error_msg)
+            
+            # Mensagens de erro mais amigáveis
+            if "not a valid phone number" in error_msg:
+                log.error("O número TWILIO_FROM não é válido ou não está habilitado para WhatsApp no Twilio")
+                log.error("Verifique se o número está no formato E.164 (+5511999999999)")
+                log.error("E se está habilitado para WhatsApp no console do Twilio")
+            
+            return {"status": "error", "reason": error_msg, "provider": "twilio"}
         except Exception as e:
             log.exception("Erro inesperado ao enviar via Twilio")
             return {"status": "error", "reason": str(e), "provider": "twilio"}
