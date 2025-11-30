@@ -126,35 +126,6 @@ jobs:
           fi
           python cobranca_single.py
 
-      - name: Verificar e responder mensagens recebidas
-        if: always()
-        env:
-          # Mesmas variáveis do step anterior
-          START_YEAR: "2026"
-          START_MONTH: "1"
-          BUSINESS_DAYS_AFTER_MONTH_START: "5"
-          INSTALLMENTS: "6"
-          INSTALLMENT_VALUE: "386.56"
-          DEBTOR_NAME: "Samuel Cassiano de Carvalho"
-          DEBTOR_CPF: "REDACTED"
-          DEBTOR_EMAIL: "samuelsamuelheibr@hotmail.com"
-          DEBTOR_PHONE: "+558487796531"
-          TIMEZONE: "America/Sao_Paulo"
-          TEST_MODE: ${{ github.event.inputs.test_mode || 'true' }}
-          MULTA_PERCENT: "2.0"
-          INTEREST_MONTHLY_PERCENT: "1.0"
-          GRACE_DAYS: "0"
-          CURRENCY: "BRL"
-          PIX_KEY: "84988910528"
-          WHATSAPP_PROVIDER: "twilio"
-          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
-          TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          echo "Verificando mensagens recebidas nas últimas 24 horas..."
-          python verificar_respostas.py
-
       - name: Verificar logs
         if: always()
         run: |
